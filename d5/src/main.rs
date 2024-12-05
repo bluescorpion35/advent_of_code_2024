@@ -1,11 +1,8 @@
 // What a disaster
-use std::fmt;
 use std::collections::{HashMap, HashSet, VecDeque};
-use rand::thread_rng;
-use topo_sort::{SortResults, TopoSort};
-use rand::seq::SliceRandom;
+use std::fmt;
 fn main() {
-    let file = std::fs::read_to_string("input").unwrap();
+    let file = std::fs::read_to_string("input2").unwrap();
     let parts = file.split("\n\n").collect::<Vec<&str>>();
     let rules_raw = parts[0].split("\n").collect::<Vec<&str>>();
     let mut instructions_raw = parts[1].split("\n").collect::<Vec<&str>>();
@@ -36,8 +33,7 @@ fn main() {
         println!("{instruction:?}");
         if instruction.is_sorted {
         } else {
-            instruction.sort(&rules);
-            total += instruction.middle_page()
+            total += instruction.middle_page_unsorted(&rules);
         }
     }
     println!("total: {}", total);
@@ -104,29 +100,37 @@ impl Instruction {
         println!("test");
         self.instructions[self.instructions.len() / 2]
     }
-    pub fn sort(&mut self, rules: &Vec<Rule>) {
-        let mut sorted = false;
 
-        while !sorted {
-            sorted = true;
-            for i in 0..self.instructions.len() - 1 {
-                // Check if the current pair of instructions are out of order according to any of the rules
-                for rule in rules {
-                    println!("{0:?}", self.instructions);
-                    if let (Some(i1_pos), Some(i2_pos)) = (
-                        self.instructions.iter().position(|&x| x == rule.i1),
-                        self.instructions.iter().position(|&x| x == rule.i2),
-                    ) {
-                        if i1_pos > i2_pos { // Violation of rule
-                            self.instructions.swap(i, i + 1); // Swap elements
-                            sorted = false; // Continue checking because we made a swap
-                            break; // Exit early to start over with the updated list
-                        }
-                    }
-                }
+    pub fn middle_page_unsorted(&self, rules: &Vec<Rule>) -> i32 {
+        for i in &self.instructions {
+            let pages: (i32, i32) = self.count_pages(*i, rules);
+            if pages.0 == pages.1 {
+                return *i;
             }
         }
-        println!("Sort Complete: {:?}", self.instructions);
+
+        panic!("Object not found\nThe requested URL was not found on this server. If you entered the URL manually please check your spelling and try again. ")
+    }
+
+    pub fn count_pages(&self, instruction: i32, rules: &Vec<Rule>) -> (i32, i32) {
+        let mut before: Vec<i32> = Vec::new();
+        let mut after: Vec<i32> = Vec::new();
+        let mut deps: Vec<i32> = vec![instruction];
+        for rule in rules {
+            if deps.contains(&rule.i1) && !deps.contains(&rule.i2) {
+                after.push(rule.i2)
+            } else if deps.contains(&rule.i2) && !deps.contains(&rule.i1) {
+                before.push(rule.i1)
+            }
+            deps.append(&mut before.clone());
+            deps.append(&mut after.clone());
+
+
+        }
+        println!("deps: {:?}", deps);
+        println!("before: {:?}", before);
+        println!("after: {:?}", after);
+        (before.len() as i32, after.len() as i32)
     }
 
     pub fn is_sorted(&self, rules: &Vec<Rule>) -> bool {
@@ -163,7 +167,6 @@ mod tests {
         assert_eq!(3, instruction.middle_page());
     }
 
-
     // Helper function to create an instruction with a given set of instructions and rules
     fn create_instruction(instructions: Vec<i32>, rules: &Vec<Rule>) -> Instruction {
         Instruction::create(instructions, &rules)
@@ -172,10 +175,7 @@ mod tests {
     // Test case for a sorted instruction list
     #[test]
     fn test_sorted_instructions() {
-        let rules = vec![
-            Rule { i1: 1, i2: 2 },
-            Rule { i1: 2, i2: 3 },
-        ];
+        let rules = vec![Rule { i1: 1, i2: 2 }, Rule { i1: 2, i2: 3 }];
         let instruction = create_instruction(vec![1, 2, 3], &rules);
         assert!(instruction.is_sorted(&rules));
     }
@@ -183,10 +183,7 @@ mod tests {
     // Test case for an unsorted instruction list
     #[test]
     fn test_unsorted_instructions() {
-        let rules = vec![
-            Rule { i1: 1, i2: 2 },
-            Rule { i1: 2, i2: 3 },
-        ];
+        let rules = vec![Rule { i1: 1, i2: 2 }, Rule { i1: 2, i2: 3 }];
         let instruction = create_instruction(vec![2, 1, 3], &rules);
         assert!(!instruction.is_sorted(&rules));
     }
@@ -194,10 +191,7 @@ mod tests {
     // Test case when a rule's elements are not in the instruction list
     #[test]
     fn test_missing_elements_in_instructions() {
-        let rules = vec![
-            Rule { i1: 1, i2: 2 },
-            Rule { i1: 2, i2: 3 },
-        ];
+        let rules = vec![Rule { i1: 1, i2: 2 }, Rule { i1: 2, i2: 3 }];
         let instruction = create_instruction(vec![4, 5], &rules);
         // Since the rules reference 1 and 2, which are not in the list, it should return true
         assert!(instruction.is_sorted(&rules));
@@ -230,13 +224,9 @@ mod tests {
     // Test case for an empty list of instructions
     #[test]
     fn test_empty_instruction_list() {
-        let rules = vec![
-            Rule { i1: 1, i2: 2 },
-            Rule { i1: 2, i2: 3 },
-        ];
+        let rules = vec![Rule { i1: 1, i2: 2 }, Rule { i1: 2, i2: 3 }];
         let instruction = create_instruction(vec![], &rules);
         // An empty list should be considered sorted as no rules can be violated
         assert!(instruction.is_sorted(&rules));
     }
 }
-
